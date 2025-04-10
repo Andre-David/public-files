@@ -1,30 +1,35 @@
 #!/bin/bash
 
-echo "== Iniciando carregamento de módulos para áudio bytcr-rt5640 =="
+echo "== Instalando arquivos UCM para chtnau8824 =="
 
-MODULOS=(
-  snd_soc_rt5640
-  snd_intel_sst_acpi
-  snd_soc_sst_bytcr_rt5640
-)
+# Instalar dependência git caso não tenha
+sudo apt install -y git
 
-for MOD in "${MODULOS[@]}"; do
-  echo "→ Carregando módulo: $MOD"
-  sudo modprobe "$MOD" 2>/dev/null && echo "✓ $MOD carregado" || echo "✗ Falha ao carregar $MOD"
-done
+# Clonar repositório
+cd /tmp
+git clone https://github.com/thesofproject/alsa-ucm-conf.git
 
-echo -e "\n== Verificando dispositivos de áudio =="
-aplay -l || echo "Nenhum dispositivo encontrado"
+# Verificar existência dos arquivos
+if [ ! -d alsa-ucm-conf/ucm2/conf.d/chtnau8824 ]; then
+    echo "✗ Arquivos chtnau8824 não encontrados no repositório."
+    exit 1
+fi
 
-echo -e "\n== Verificando presença no /etc/modules =="
+# Copiar arquivos para o sistema
+sudo cp -r alsa-ucm-conf/ucm2/conf.d/chtnau8824* /usr/share/alsa/ucm2/conf.d/
 
-for MOD in "${MODULOS[@]}"; do
-  if ! grep -q "^$MOD" /etc/modules; then
-    echo "$MOD" | sudo tee -a /etc/modules > /dev/null
-    echo "✓ Adicionado $MOD ao /etc/modules"
-  else
-    echo "✓ $MOD já presente no /etc/modules"
-  fi
-done
+echo "✓ Arquivos UCM copiados para /usr/share/alsa/ucm2/conf.d/"
 
-echo -e "\nReinicie o sistema para aplicar os módulos persistentemente."
+# Reiniciar PipeWire (ou PulseAudio)
+echo "== Reiniciando servidor de áudio =="
+
+if systemctl --user is-active pipewire &>/dev/null; then
+    systemctl --user restart pipewire pipewire-pulse wireplumber
+    echo "✓ PipeWire reiniciado"
+else
+    pulseaudio -k
+    pulseaudio --start
+    echo "✓ PulseAudio reiniciado"
+fi
+
+echo -e "\nVerifique com 'pactl list sinks short' se o áudio foi ativado."
